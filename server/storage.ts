@@ -30,6 +30,21 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
+  // Driver management operations
+  getAllDrivers(): Promise<any[]>;
+  getDriverById(id: number | string): Promise<any | undefined>;
+  getDriverByUserId(userId: string): Promise<any | undefined>;
+  createDriver(driver: any): Promise<any>;
+  updateDriver(id: number | string, data: any): Promise<any | undefined>;
+  deleteDriver(id: number | string): Promise<boolean>;
+  
+  // Order management operations
+  getAllOrders(): Promise<any[]>;
+  getOrderById(id: number | string): Promise<any | undefined>;
+  createOrder(order: any): Promise<any>;
+  updateOrderStatus(id: number | string, status: string): Promise<any | undefined>;
+  assignOrderToDriver(orderId: number | string, driverId: number | string): Promise<any | undefined>;
+  
   // Data Source operations
   getAllDataSources(userId: string, includePublic?: boolean): Promise<DataSource[]>;
   getDataSourceById(id: number): Promise<DataSource | undefined>;
@@ -95,6 +110,157 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return user;
+  }
+
+  // Driver Management Operations
+  async getAllDrivers(): Promise<any[]> {
+    // For now, return mock data
+    return [
+      {
+        id: 1,
+        name: "John Doe",
+        email: "john@example.com",
+        phone: "555-1234",
+        profileImageUrl: "https://randomuser.me/api/portraits/men/1.jpg",
+        vehicleType: "Car",
+        zone: "North",
+        status: "active",
+        rating: 4.8,
+        activeOrders: 2,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 2,
+        name: "Jane Smith",
+        email: "jane@example.com", 
+        phone: "555-5678",
+        profileImageUrl: "https://randomuser.me/api/portraits/women/1.jpg",
+        vehicleType: "Scooter",
+        zone: "South",
+        status: "off-duty",
+        rating: 4.5,
+        activeOrders: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ];
+  }
+  
+  async getDriverById(id: number | string): Promise<any | undefined> {
+    const drivers = await this.getAllDrivers();
+    return drivers.find(driver => driver.id.toString() === id.toString());
+  }
+  
+  async getDriverByUserId(userId: string): Promise<any | undefined> {
+    const drivers = await this.getAllDrivers();
+    return drivers[0]; // For testing purposes
+  }
+  
+  async createDriver(driver: any): Promise<any> {
+    return {
+      id: Date.now(),
+      ...driver,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+  
+  async updateDriver(id: number | string, data: any): Promise<any | undefined> {
+    const driver = await this.getDriverById(id);
+    if (!driver) return undefined;
+    
+    return {
+      ...driver,
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+  }
+  
+  async deleteDriver(id: number | string): Promise<boolean> {
+    return true; // For testing purposes
+  }
+  
+  // Order Management Operations
+  async getAllOrders(): Promise<any[]> {
+    // Return test data for development
+    return [
+      {
+        id: 1,
+        customerName: "Customer 1",
+        customerPhone: "555-1111",
+        deliveryAddress: "123 Main St, City",
+        deliveryNotes: "Leave at the door",
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 2,
+        customerName: "Customer 2",
+        customerPhone: "555-2222",
+        deliveryAddress: "456 Oak St, City",
+        deliveryNotes: "",
+        status: "assigned",
+        driverId: 1,
+        driverName: "John Doe",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 3,
+        customerName: "Customer 3",
+        customerPhone: "555-3333",
+        deliveryAddress: "789 Pine St, City",
+        deliveryNotes: "Call before delivery",
+        status: "completed",
+        driverId: 2,
+        driverName: "Jane Smith",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ];
+  }
+  
+  async getOrderById(id: number | string): Promise<any | undefined> {
+    const orders = await this.getAllOrders();
+    return orders.find(order => order.id.toString() === id.toString());
+  }
+  
+  async createOrder(order: any): Promise<any> {
+    return {
+      id: Date.now(),
+      ...order,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+  
+  async updateOrderStatus(id: number | string, status: string): Promise<any | undefined> {
+    const order = await this.getOrderById(id);
+    if (!order) return undefined;
+    
+    return {
+      ...order,
+      status,
+      updatedAt: new Date().toISOString()
+    };
+  }
+  
+  async assignOrderToDriver(orderId: number | string, driverId: number | string): Promise<any | undefined> {
+    const order = await this.getOrderById(orderId);
+    const driver = await this.getDriverById(driverId);
+    
+    if (!order || !driver) return undefined;
+    
+    return {
+      ...order,
+      status: "assigned",
+      driverId: driver.id,
+      driverName: driver.name,
+      updatedAt: new Date().toISOString()
+    };
   }
 
   // Data Source operations

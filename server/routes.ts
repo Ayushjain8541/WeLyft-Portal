@@ -268,7 +268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Visualization routes
   app.get('/api/visualizations', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const user = await storage.getUser(userId);
       
       if (!user) {
