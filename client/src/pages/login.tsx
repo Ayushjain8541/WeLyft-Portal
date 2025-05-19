@@ -164,8 +164,8 @@ export default function Login() {
             Demo credentials for testing:
           </div>
           <div className="text-xs text-center text-gray-400">
-            Admin: admin@example.com / password<br />
-            Driver: driver@example.com / password
+            Admin: admin@example.com<br />
+            Creator: user@example.com
           </div>
         </CardFooter>
       </Card>
