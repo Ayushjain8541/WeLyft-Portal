@@ -13,7 +13,7 @@ interface OrderListProps {
 
 export default function OrderList({ orders, onOrderClick }: OrderListProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // Filter orders based on search term and status filter
   const filteredOrders = orders.filter((order) => {
@@ -23,7 +23,7 @@ export default function OrderList({ orders, onOrderClick }: OrderListProps) {
       order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.deliveryAddress.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === "" || order.status === statusFilter;
+    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
@@ -70,7 +70,7 @@ export default function OrderList({ orders, onOrderClick }: OrderListProps) {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="assigned">Assigned</SelectItem>
                   <SelectItem value="in-transit">In Transit</SelectItem>
