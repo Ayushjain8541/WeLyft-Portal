@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 interface SidebarProps {
-  role: "admin" | "user" | null;
+  role: "admin" | "driver" | null;
   mobile?: boolean;
 }
 
@@ -30,13 +30,13 @@ export default function Sidebar({ role, mobile = false }: SidebarProps) {
       icon: <BarChart3 className="mr-3 h-6 w-6" />,
     },
     {
-      name: "Data Sources",
-      href: "/data-sources",
-      icon: <Package className="mr-3 h-6 w-6" />,
+      name: "Drivers",
+      href: "/drivers",
+      icon: <Users className="mr-3 h-6 w-6" />,
     },
     {
-      name: "Dashboards",
-      href: "/dashboards",
+      name: "Orders",
+      href: "/orders",
       icon: <PackageCheck className="mr-3 h-6 w-6" />,
     },
     {
@@ -44,44 +44,33 @@ export default function Sidebar({ role, mobile = false }: SidebarProps) {
       href: "/reports",
       icon: <FileBarChart className="mr-3 h-6 w-6" />,
     },
-    {
-      name: "Users",
-      href: "/users",
-      icon: <Users className="mr-3 h-6 w-6" />,
-    },
   ];
 
-  const userLinks = [
+  const driverLinks = [
     {
-      name: "My Dashboard",
-      href: "/dashboard",
-      icon: <BarChart3 className="mr-3 h-6 w-6" />,
-    },
-    {
-      name: "My Visualizations",
-      href: "/visualizations",
+      name: "My Orders",
+      href: "/driver/orders",
       icon: <Package className="mr-3 h-6 w-6" />,
     },
     {
-      name: "My Reports",
-      href: "/reports",
-      icon: <FileBarChart className="mr-3 h-6 w-6" />,
+      name: "History",
+      href: "/driver/history",
+      icon: <Clock className="mr-3 h-6 w-6" />,
     },
     {
       name: "Profile",
-      href: "/profile",
+      href: "/driver/profile",
       icon: <User className="mr-3 h-6 w-6" />,
     },
   ];
 
-  // Default to user links if role is null or undefined
-  const links = role === "admin" ? adminLinks : userLinks;
+  const links = role === "admin" ? adminLinks : driverLinks;
 
   return (
     <div className="flex flex-col h-0 flex-1 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
       <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
         <div className="flex items-center flex-shrink-0 px-4">
-          <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">VisuaData</span>
+          <span className="text-xl font-bold text-primary">LogiDash</span>
         </div>
         <nav className="mt-5 flex-1 px-2 bg-white dark:bg-gray-800 space-y-1">
           {links.map((link) => (
