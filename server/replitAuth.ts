@@ -35,13 +35,13 @@ export function getSession() {
     tableName: "sessions",
   });
   return session({
-    secret: process.env.SESSION_SECRET || "dev-secret-key", // Fallback for development
+    secret: process.env.SESSION_SECRET || "visualization-tool-secret-key", // Fallback for development
     store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to false for development
       maxAge: sessionTtl,
     },
   });
@@ -135,43 +135,52 @@ export async function setupAuth(app: Express) {
   });
 }
 
-// Mock authentication for development
+// Simple authentication for development
 function setupMockAuth(app: Express) {
   app.post("/api/login", async (req, res) => {
     try {
       const { email, role } = req.body;
       
-      // First check if a user with this email already exists
-      let user;
-      
-      // Find all users (since we don't have a getByEmail method)
-      const existingUserByEmail = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
-      
-      if (existingUserByEmail.length > 0) {
-        // Use existing user
-        user = existingUserByEmail[0];
-      } else {
-        // Create new user with unique ID
-        const userId = `mock-${Date.now()}`;
-        user = await storage.upsertUser({
-          id: userId,
-          email,
-          role: role || "admin",
-          firstName: "Mock",
-          lastName: "User",
-        });
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
       }
       
-      // Create session
-      req.login({ claims: { sub: user.id } }, (err) => {
+      // Generate a fixed ID for consistent login
+      const userId = "user-" + Buffer.from(email).toString('base64').substring(0, 10);
+      
+      // Create or get the user
+      const user = await storage.upsertUser({
+        id: userId,
+        email,
+        role: role || "admin",
+        firstName: "Demo",
+        lastName: "User",
+      });
+      
+      // Create simple session
+      const userSession = { claims: { sub: userId } };
+      req.session.user = userSession;
+      
+      // Save session manually
+      req.session.save((err) => {
         if (err) {
+          console.error("Session save error:", err);
           return res.status(500).json({ message: "Error creating session" });
         }
-        return res.json({ ...user });
+        
+        req.login(userSession, (loginErr) => {
+          if (loginErr) {
+            console.error("Login error:", loginErr);
+            return res.status(500).json({ message: "Error creating session" });
+          }
+          
+          return res.json({ 
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || "User"
+          });
+        });
       });
     } catch (error) {
       console.error("Login error:", error);
