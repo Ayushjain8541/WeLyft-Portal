@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
 import { z } from "zod";
 import { 
   insertDataSourceSchema, 
@@ -13,7 +13,7 @@ import {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware setup
-  await setupAuth(app);
+  setupSimpleAuth(app);
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
