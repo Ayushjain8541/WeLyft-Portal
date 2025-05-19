@@ -38,7 +38,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard data
   app.get('/api/dashboard', isAuthenticated, async (req: any, res) => {
     try {
-      // Get user role
+      // Get user ID
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
@@ -46,29 +46,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      // Only admins can access dashboard data
-      if (user.role !== "admin") {
-        return res.status(403).json({ message: "Not authorized to access dashboard data" });
-      }
-      
       // Get dashboard data
-      const orders = await storage.getRecentOrders(5);
+      const dashboards = await storage.getAllDashboards(userId);
+      const dataSources = await storage.getAllDataSources(userId);
+      const reports = await storage.getAllReports(userId);
+      
+      // Get some recent visualizations
+      const allVisualizations = await storage.getAllVisualizations(userId);
+      const recentVisualizations = allVisualizations.sort((a, b) => {
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }).slice(0, 5);
+      
+      // Calculate stats
       const stats = {
-        totalOrders: await storage.getOrderCount(),
-        completedOrders: await storage.getCompletedOrderCount(),
-        avgCompletionTime: 42, // Placeholder, would calculate from actual data
-        activeDrivers: await storage.getActiveDriverCount()
+        dashboardCount: dashboards.length,
+        dataSourceCount: dataSources.length,
+        reportCount: reports.length,
+        visualizationCount: allVisualizations.length,
       };
       
+      // Calculate usage metrics
+      const publicDashboards = dashboards.filter(d => d.isPublic).length;
+      const publicReports = reports.filter(r => r.isPublic).length;
+      
       const metrics = {
-        completionRate: 85,
-        onTimeRate: 92,
-        driverEfficiency: 78,
-        customerSatisfaction: 94
+        publicResourcePercentage: dashboards.length > 0 ? Math.round((publicDashboards / dashboards.length) * 100) : 0,
+        dataSourceUtilization: dataSources.length > 0 ? Math.round((allVisualizations.length / dataSources.length) * 100) : 0,
+        reportGeneration: reports.length > 0 ? publicReports : 0,
+        teamCollaboration: 85 // Placeholder until we implement team activity tracking
       };
       
       res.json({
-        orders,
+        recentDashboards: dashboards.slice(0, 5),
+        recentVisualizations,
         stats,
         metrics
       });
@@ -78,147 +88,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Driver routes
-  app.get('/api/drivers', isAuthenticated, async (req: any, res) => {
+  // Data Source routes
+  app.get('/api/data-sources', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (!user || user.role !== "admin") {
-        return res.status(403).json({ message: "Not authorized to access driver data" });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
       
-      const drivers = await storage.getAllDrivers();
-      res.json(drivers);
+      const dataSources = await storage.getAllDataSources(userId);
+      res.json(dataSources);
     } catch (error) {
-      console.error("Error fetching drivers:", error);
-      res.status(500).json({ message: "Failed to fetch drivers" });
+      console.error("Error fetching data sources:", error);
+      res.status(500).json({ message: "Failed to fetch data sources" });
     }
   });
 
-  app.post('/api/drivers', isAuthenticated, async (req: any, res) => {
+  app.post('/api/data-sources', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (!user || user.role !== "admin") {
-        return res.status(403).json({ message: "Not authorized to create drivers" });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
       
       // Validate request body
-      const validatedData = insertDriverSchema.parse(req.body);
+      const validatedData = insertDataSourceSchema.parse({
+        ...req.body,
+        userId
+      });
       
-      // Create driver
-      const driver = await storage.createDriver(validatedData);
-      res.status(201).json(driver);
+      // Create data source
+      const dataSource = await storage.createDataSource(validatedData);
+      res.status(201).json(dataSource);
     } catch (error) {
-      console.error("Error creating driver:", error);
+      console.error("Error creating data source:", error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid driver data", errors: error.errors });
+        return res.status(400).json({ message: "Invalid data source data", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to create driver" });
+      res.status(500).json({ message: "Failed to create data source" });
     }
   });
 
-  app.patch('/api/drivers/:id', isAuthenticated, async (req: any, res) => {
+  app.patch('/api/data-sources/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (!user || user.role !== "admin") {
-        return res.status(403).json({ message: "Not authorized to update drivers" });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
       
-      const driverId = parseInt(req.params.id);
-      if (isNaN(driverId)) {
-        return res.status(400).json({ message: "Invalid driver ID" });
+      const dataSourceId = parseInt(req.params.id);
+      if (isNaN(dataSourceId)) {
+        return res.status(400).json({ message: "Invalid data source ID" });
+      }
+      
+      // Get the data source to check ownership
+      const dataSource = await storage.getDataSourceById(dataSourceId);
+      if (!dataSource) {
+        return res.status(404).json({ message: "Data source not found" });
+      }
+      
+      // Check if user owns the data source
+      if (dataSource.userId !== userId) {
+        return res.status(403).json({ message: "Not authorized to update this data source" });
       }
       
       // Validate request body
-      const validatedData = insertDriverSchema.partial().parse(req.body);
-      
-      // Update driver
-      const driver = await storage.updateDriver(driverId, validatedData);
-      if (!driver) {
-        return res.status(404).json({ message: "Driver not found" });
-      }
-      
-      res.json(driver);
-    } catch (error) {
-      console.error("Error updating driver:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid driver data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to update driver" });
-    }
-  });
-
-  // Driver Profile Routes for logged-in drivers
-  app.get('/api/drivers/me', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      if (user.role !== "driver") {
-        return res.status(403).json({ message: "Not a driver account" });
-      }
-      
-      const driver = await storage.getDriverByUserId(userId);
-      if (!driver) {
-        return res.status(404).json({ message: "Driver profile not found" });
-      }
-      
-      res.json(driver);
-    } catch (error) {
-      console.error("Error fetching driver profile:", error);
-      res.status(500).json({ message: "Failed to fetch driver profile" });
-    }
-  });
-
-  app.patch('/api/drivers/me/profile', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      if (user.role !== "driver") {
-        return res.status(403).json({ message: "Not a driver account" });
-      }
-      
-      const driver = await storage.getDriverByUserId(userId);
-      if (!driver) {
-        return res.status(404).json({ message: "Driver profile not found" });
-      }
-      
-      // Validate profile data
-      const profileSchema = z.object({
-        name: z.string().min(2).optional(),
-        email: z.string().email().optional(),
-        phone: z.string().min(10).optional(),
+      const updateSchema = z.object({
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        type: z.string().optional(), 
+        config: z.record(z.any()).optional(),
+        isPublic: z.boolean().optional()
       });
       
-      const validatedData = profileSchema.parse(req.body);
+      const validatedData = updateSchema.parse(req.body);
       
-      // Update driver profile
-      const updatedDriver = await storage.updateDriver(driver.id, validatedData);
-      res.json(updatedDriver);
+      // Update data source
+      const updatedDataSource = await storage.updateDataSource(dataSourceId, validatedData);
+      
+      res.json(updatedDataSource);
     } catch (error) {
-      console.error("Error updating driver profile:", error);
+      console.error("Error updating data source:", error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid profile data", errors: error.errors });
+        return res.status(400).json({ message: "Invalid data source data", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to update profile" });
+      res.status(500).json({ message: "Failed to update data source" });
     }
   });
 
-  app.patch('/api/drivers/me/settings', isAuthenticated, async (req: any, res) => {
+  // Dashboard routes
+  app.get('/api/dashboards', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -227,44 +192,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      if (user.role !== "driver") {
-        return res.status(403).json({ message: "Not a driver account" });
+      const dashboards = await storage.getAllDashboards(userId);
+      res.json(dashboards);
+    } catch (error) {
+      console.error("Error fetching dashboards:", error);
+      res.status(500).json({ message: "Failed to fetch dashboards" });
+    }
+  });
+
+  app.post('/api/dashboards', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
       
-      const driver = await storage.getDriverByUserId(userId);
-      if (!driver) {
-        return res.status(404).json({ message: "Driver profile not found" });
-      }
-      
-      // Validate settings data
-      const settingsSchema = z.object({
-        status: z.enum(["active", "off-duty"]).optional(),
-        preferredZone: z.string().min(1).optional(),
-        notifications: z.boolean().optional(),
+      // Validate dashboard data
+      const dashboardData = insertDashboardSchema.parse({
+        ...req.body,
+        userId,
+        layout: req.body.layout || {} // Default empty layout
       });
       
-      const validatedData = settingsSchema.parse(req.body);
-      
-      // Map settings to driver update
-      const driverUpdate: any = {};
-      if (validatedData.status) driverUpdate.status = validatedData.status;
-      if (validatedData.preferredZone) driverUpdate.zone = validatedData.preferredZone;
-      if (validatedData.notifications !== undefined) driverUpdate.notifications = validatedData.notifications;
-      
-      // Update driver settings
-      const updatedDriver = await storage.updateDriver(driver.id, driverUpdate);
-      res.json(updatedDriver);
+      // Create dashboard
+      const dashboard = await storage.createDashboard(dashboardData);
+      res.status(201).json(dashboard);
     } catch (error) {
-      console.error("Error updating driver settings:", error);
+      console.error("Error creating dashboard:", error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid settings data", errors: error.errors });
+        return res.status(400).json({ message: "Invalid dashboard data", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to update settings" });
+      res.status(500).json({ message: "Failed to create dashboard" });
     }
   });
 
-  // Driver order routes
-  app.get('/api/drivers/me/orders/active', isAuthenticated, async (req: any, res) => {
+  app.get('/api/dashboards/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -273,25 +237,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      if (user.role !== "driver") {
-        return res.status(403).json({ message: "Not a driver account" });
+      const dashboardId = parseInt(req.params.id);
+      if (isNaN(dashboardId)) {
+        return res.status(400).json({ message: "Invalid dashboard ID" });
       }
       
-      const driver = await storage.getDriverByUserId(userId);
-      if (!driver) {
-        return res.status(404).json({ message: "Driver profile not found" });
+      // Get the dashboard with visualizations
+      const dashboard = await storage.getDashboardWithVisualizations(dashboardId);
+      if (!dashboard) {
+        return res.status(404).json({ message: "Dashboard not found" });
       }
       
-      // Get active orders for driver
-      const orders = await storage.getDriverActiveOrders(driver.id);
-      res.json(orders);
+      // Check if user has access to the dashboard
+      if (dashboard.userId !== userId && !dashboard.isPublic) {
+        return res.status(403).json({ message: "Not authorized to access this dashboard" });
+      }
+      
+      res.json(dashboard);
     } catch (error) {
-      console.error("Error fetching driver orders:", error);
-      res.status(500).json({ message: "Failed to fetch driver orders" });
+      console.error("Error fetching dashboard:", error);
+      res.status(500).json({ message: "Failed to fetch dashboard" });
     }
   });
 
-  app.get('/api/drivers/me/orders/history', isAuthenticated, async (req: any, res) => {
+  // Visualization routes
+  app.get('/api/visualizations', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -300,25 +270,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      if (user.role !== "driver") {
-        return res.status(403).json({ message: "Not a driver account" });
-      }
-      
-      const driver = await storage.getDriverByUserId(userId);
-      if (!driver) {
-        return res.status(404).json({ message: "Driver profile not found" });
-      }
-      
-      // Get order history for driver
-      const orders = await storage.getDriverOrderHistory(driver.id);
-      res.json(orders);
+      const visualizations = await storage.getAllVisualizations(userId);
+      res.json(visualizations);
     } catch (error) {
-      console.error("Error fetching driver order history:", error);
-      res.status(500).json({ message: "Failed to fetch driver order history" });
+      console.error("Error fetching visualizations:", error);
+      res.status(500).json({ message: "Failed to fetch visualizations" });
     }
   });
 
-  app.get('/api/drivers/me/stats', isAuthenticated, async (req: any, res) => {
+  app.post('/api/visualizations', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -327,32 +287,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      if (user.role !== "driver") {
-        return res.status(403).json({ message: "Not a driver account" });
-      }
-      
-      const driver = await storage.getDriverByUserId(userId);
-      if (!driver) {
-        return res.status(404).json({ message: "Driver profile not found" });
-      }
-      
-      // Get driver stats
-      const deliveredOrders = await storage.getDriverCompletedOrderCount(driver.id);
-      const totalRatings = 42; // Placeholder, would get from actual rating data
-      const completionRate = 98; 
-      const onTimeRate = 95;
-      const avgDeliveryTime = 32;
-      
-      res.json({
-        deliveredOrders,
-        totalRatings,
-        completionRate,
-        onTimeRate,
-        avgDeliveryTime
+      // Validate visualization data
+      const visualizationData = insertVisualizationSchema.parse({
+        ...req.body,
+        userId,
+        config: req.body.config || {} // Default empty config
       });
+      
+      // Create visualization
+      const visualization = await storage.createVisualization(visualizationData);
+      res.status(201).json(visualization);
     } catch (error) {
-      console.error("Error fetching driver stats:", error);
-      res.status(500).json({ message: "Failed to fetch driver stats" });
+      console.error("Error creating visualization:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid visualization data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create visualization" });
+    }
+  });
+
+  app.get('/api/visualizations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const visualizationId = parseInt(req.params.id);
+      if (isNaN(visualizationId)) {
+        return res.status(400).json({ message: "Invalid visualization ID" });
+      }
+      
+      // Get the visualization
+      const visualization = await storage.getVisualizationById(visualizationId);
+      if (!visualization) {
+        return res.status(404).json({ message: "Visualization not found" });
+      }
+      
+      // Check if user owns the visualization or if it belongs to a public dashboard
+      if (visualization.userId !== userId) {
+        // Check if visualization belongs to a public dashboard
+        if (visualization.dashboardId) {
+          const dashboard = await storage.getDashboardById(visualization.dashboardId);
+          if (!dashboard || !dashboard.isPublic) {
+            return res.status(403).json({ message: "Not authorized to access this visualization" });
+          }
+        } else {
+          return res.status(403).json({ message: "Not authorized to access this visualization" });
+        }
+      }
+      
+      res.json(visualization);
+    } catch (error) {
+      console.error("Error fetching visualization:", error);
+      res.status(500).json({ message: "Failed to fetch visualization" });
     }
   });
 
