@@ -346,112 +346,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Order routes
-  app.get('/api/orders', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      if (!user || user.role !== "admin") {
-        return res.status(403).json({ message: "Not authorized to access orders" });
-      }
-      
-      const orders = await storage.getAllOrders();
-      res.json(orders);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-      res.status(500).json({ message: "Failed to fetch orders" });
-    }
-  });
-
-  app.get('/api/orders/:id', isAuthenticated, async (req: any, res) => {
+  // Reports routes
+  app.get('/api/reports', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
       if (!user) {
-        return res.status(403).json({ message: "Not authorized to access orders" });
+        return res.status(404).json({ message: "User not found" });
       }
       
-      const orderId = parseInt(req.params.id);
-      if (isNaN(orderId)) {
-        return res.status(400).json({ message: "Invalid order ID" });
-      }
-      
-      const order = await storage.getOrderById(orderId);
-      if (!order) {
-        return res.status(404).json({ message: "Order not found" });
-      }
-      
-      // For drivers, check if order is assigned to them
-      if (user.role === "driver") {
-        const driver = await storage.getDriverByUserId(userId);
-        if (!driver || order.driverId !== driver.id) {
-          return res.status(403).json({ message: "Not authorized to access this order" });
-        }
-      }
-      
-      res.json(order);
+      const reports = await storage.getAllReports(userId);
+      res.json(reports);
     } catch (error) {
-      console.error("Error fetching order:", error);
-      res.status(500).json({ message: "Failed to fetch order" });
+      console.error("Error fetching reports:", error);
+      res.status(500).json({ message: "Failed to fetch reports" });
     }
   });
 
-  app.post('/api/orders', isAuthenticated, async (req: any, res) => {
+  app.get('/api/reports/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (!user || user.role !== "admin") {
-        return res.status(403).json({ message: "Not authorized to create orders" });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
       
-      // Validate request body
-      const validatedData = insertOrderSchema.parse(req.body);
+      const reportId = parseInt(req.params.id);
+      if (isNaN(reportId)) {
+        return res.status(400).json({ message: "Invalid report ID" });
+      }
       
-      // Create order
-      const order = await storage.createOrder(validatedData);
-      res.status(201).json(order);
+      const report = await storage.getReportById(reportId);
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+      
+      // Check if user has access to the report
+      if (report.userId !== userId && !report.isPublic) {
+        return res.status(403).json({ message: "Not authorized to access this report" });
+      }
+      
+      res.json(report);
     } catch (error) {
-      console.error("Error creating order:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid order data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create order" });
+      console.error("Error fetching report:", error);
+      res.status(500).json({ message: "Failed to fetch report" });
     }
   });
 
-  app.patch('/api/orders/:id', isAuthenticated, async (req: any, res) => {
+  app.post('/api/reports', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (!user || user.role !== "admin") {
-        return res.status(403).json({ message: "Not authorized to update orders" });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
       
-      const orderId = parseInt(req.params.id);
-      if (isNaN(orderId)) {
-        return res.status(400).json({ message: "Invalid order ID" });
+      // Validate report data
+      const reportData = insertReportSchema.parse({
+        ...req.body,
+        userId,
+        visualizations: req.body.visualizations || [], // Default empty visualizations array
+        schedule: req.body.schedule || null // Default null schedule
+      });
+      
+      // Create report
+      const report = await storage.createReport(reportData);
+      res.status(201).json(report);
+    } catch (error) {
+      console.error("Error creating report:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid report data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create report" });
+    }
+  });
+
+  app.patch('/api/reports/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const reportId = parseInt(req.params.id);
+      if (isNaN(reportId)) {
+        return res.status(400).json({ message: "Invalid report ID" });
+      }
+      
+      // Get the report to check ownership
+      const report = await storage.getReportById(reportId);
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+      
+      // Check if user owns the report
+      if (report.userId !== userId) {
+        return res.status(403).json({ message: "Not authorized to update this report" });
       }
       
       // Validate request body
-      const validatedData = insertOrderSchema.partial().parse(req.body);
+      const updateSchema = z.object({
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        schedule: z.record(z.any()).nullable().optional(),
+        visualizations: z.array(z.any()).optional(),
+        format: z.string().optional(),
+        isPublic: z.boolean().optional()
+      });
       
-      // Update order
-      const order = await storage.updateOrder(orderId, validatedData);
-      if (!order) {
-        return res.status(404).json({ message: "Order not found" });
-      }
+      const validatedData = updateSchema.parse(req.body);
       
-      res.json(order);
+      // Update report
+      const updatedReport = await storage.updateReport(reportId, validatedData);
+      
+      res.json(updatedReport);
     } catch (error) {
-      console.error("Error updating order:", error);
+      console.error("Error updating report:", error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid order data", errors: error.errors });
+        return res.status(400).json({ message: "Invalid report data", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to update order" });
+      res.status(500).json({ message: "Failed to update report" });
     }
   });
 

@@ -7,6 +7,9 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { users } from "@shared/schema";
 
 if (!process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
@@ -138,20 +141,33 @@ function setupMockAuth(app: Express) {
     try {
       const { email, role } = req.body;
       
-      // Simulate user authentication
-      const userId = `mock-${Date.now()}`;
+      // First check if a user with this email already exists
+      let user;
       
-      // Create user in database
-      const user = await storage.upsertUser({
-        id: userId,
-        email,
-        role: role || "admin",
-        firstName: "Mock",
-        lastName: "User",
-      });
+      // Find all users (since we don't have a getByEmail method)
+      const existingUserByEmail = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      
+      if (existingUserByEmail.length > 0) {
+        // Use existing user
+        user = existingUserByEmail[0];
+      } else {
+        // Create new user with unique ID
+        const userId = `mock-${Date.now()}`;
+        user = await storage.upsertUser({
+          id: userId,
+          email,
+          role: role || "admin",
+          firstName: "Mock",
+          lastName: "User",
+        });
+      }
       
       // Create session
-      req.login({ claims: { sub: userId } }, (err) => {
+      req.login({ claims: { sub: user.id } }, (err) => {
         if (err) {
           return res.status(500).json({ message: "Error creating session" });
         }
