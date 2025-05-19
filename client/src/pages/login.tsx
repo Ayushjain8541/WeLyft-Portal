@@ -29,17 +29,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
+  password: z.string().optional(),
 });
 
 const roleSchema = z.object({
-  role: z.enum(["admin", "driver"]),
+  role: z.enum(["admin", "user"]),
 });
 
 export default function Login() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const [userRole, setUserRole] = useState<"admin" | "driver">("admin");
+  const [userRole, setUserRole] = useState<"admin" | "user">("user");
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -52,7 +52,7 @@ export default function Login() {
   const roleForm = useForm<z.infer<typeof roleSchema>>({
     resolver: zodResolver(roleSchema),
     defaultValues: {
-      role: "admin",
+      role: "user",
     },
   });
 
@@ -87,37 +87,39 @@ export default function Login() {
   }
 
   function handleRoleChange(value: string) {
-    setUserRole(value as "admin" | "driver");
+    setUserRole(value as "admin" | "user");
   }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">LogiDash</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">VisuaData</span>
+          </CardTitle>
           <CardDescription className="text-center">
-            Enter your credentials to access your account
+            Enter your email to access your data visualization dashboards
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Tabs
-            defaultValue="admin"
+            defaultValue="user"
             value={userRole}
             onValueChange={handleRoleChange}
             className="w-full"
           >
             <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="user">Creator</TabsTrigger>
               <TabsTrigger value="admin">Admin</TabsTrigger>
-              <TabsTrigger value="driver">Driver</TabsTrigger>
             </TabsList>
-            <TabsContent value="admin">
+            <TabsContent value="user">
               <p className="text-sm text-gray-500 mt-2 mb-4">
-                Access the admin dashboard to manage drivers and orders.
+                Access your creative dashboards, visualizations, and reports.
               </p>
             </TabsContent>
-            <TabsContent value="driver">
+            <TabsContent value="admin">
               <p className="text-sm text-gray-500 mt-2 mb-4">
-                Access the driver portal to view and complete your assigned orders.
+                Access admin tools to manage users, data sources, and system settings.
               </p>
             </TabsContent>
           </Tabs>

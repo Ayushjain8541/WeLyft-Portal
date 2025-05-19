@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 interface SidebarProps {
-  role: "admin" | "driver" | null;
+  role: "admin" | "user" | null;
   mobile?: boolean;
 }
 
@@ -30,13 +30,13 @@ export default function Sidebar({ role, mobile = false }: SidebarProps) {
       icon: <BarChart3 className="mr-3 h-6 w-6" />,
     },
     {
-      name: "Drivers",
-      href: "/drivers",
-      icon: <Users className="mr-3 h-6 w-6" />,
+      name: "Data Sources",
+      href: "/data-sources",
+      icon: <Package className="mr-3 h-6 w-6" />,
     },
     {
-      name: "Orders",
-      href: "/orders",
+      name: "Dashboards",
+      href: "/dashboards",
       icon: <PackageCheck className="mr-3 h-6 w-6" />,
     },
     {
@@ -44,27 +44,37 @@ export default function Sidebar({ role, mobile = false }: SidebarProps) {
       href: "/reports",
       icon: <FileBarChart className="mr-3 h-6 w-6" />,
     },
+    {
+      name: "Users",
+      href: "/users",
+      icon: <Users className="mr-3 h-6 w-6" />,
+    },
   ];
 
-  const driverLinks = [
+  const userLinks = [
     {
-      name: "My Orders",
-      href: "/driver/orders",
+      name: "My Dashboard",
+      href: "/dashboard",
+      icon: <BarChart3 className="mr-3 h-6 w-6" />,
+    },
+    {
+      name: "My Visualizations",
+      href: "/visualizations",
       icon: <Package className="mr-3 h-6 w-6" />,
     },
     {
-      name: "History",
-      href: "/driver/history",
-      icon: <Clock className="mr-3 h-6 w-6" />,
+      name: "My Reports",
+      href: "/reports",
+      icon: <FileBarChart className="mr-3 h-6 w-6" />,
     },
     {
       name: "Profile",
-      href: "/driver/profile",
+      href: "/profile",
       icon: <User className="mr-3 h-6 w-6" />,
     },
   ];
 
-  const links = role === "admin" ? adminLinks : driverLinks;
+  const links = role === "admin" ? adminLinks : userLinks;
 
   return (
     <div className="flex flex-col h-0 flex-1 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
